@@ -2,25 +2,146 @@
 @using Humanizer
 @inject BlazorDataModel Model
 
-@if (Model.Loaded && Model.LoggedIn && Model.View == _pageName) {
-    if (Model.Tenant.TenantSettings.LogoIncludedOnHomePage && !String.IsNullOrWhiteSpace(LogoUrl)) {
+@if(Model.Loaded && Model.LoggedIn && Model.View == _pageName) {
+    if(Model.Tenant.TenantSettings.LogoIncludedOnHomePage && !String.IsNullOrWhiteSpace(LogoUrl)) {
         <div class="home-page-logo-container">
             <img src="@LogoUrl" class="logo-homepage" />
         </div>
     }
 
     <h1 class="page-title">
-        @if (!String.IsNullOrWhiteSpace(Model.Tenant.TenantSettings.AppIcon)) {
+        @if(!String.IsNullOrWhiteSpace(Model.Tenant.TenantSettings.AppIcon)) {
             <i>@((MarkupString)Model.Tenant.TenantSettings.AppIcon)</i>
         }
         <Language Tag="Welcome" ReplaceSpaces="true" /> @Model.User.FirstName
     </h1>
+
+    <!-- App Repo Explorer -->
+    <div class="card mt-3">
+        <div class="card-header">
+            <strong>.app File Explorer (from Public Git Repo)</strong>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label" for="repoUrl">Public Repo URL</label>
+                    <input id="repoUrl" class="form-control" placeholder="https://github.com/org/repo.git"
+                           @bind="RepoUrl" />
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary me-2" @onclick="CloneRepo" disabled="@IsBusy">
+                        <Icon Name="Refresh" /> Clone
+                    </button>
+                    @if(!string.IsNullOrWhiteSpace(RepoId)) {
+                        <span class="text-muted">Repo Id: @RepoId</span>
+                    }
+                </div>
+            </div>
+
+            @if(Messages.Count > 0) {
+                <div class="alert alert-warning mt-3">
+                    <ul class="mb-0">
+                        @foreach(var m in Messages) {
+                            <li>@m</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if(!string.IsNullOrWhiteSpace(RepoId)) {
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <div class="mb-2"><strong>*.app.* Files</strong></div>
+                        <div class="list-group small" style="max-height: 420px; overflow:auto;">
+                            @if(Files.Count == 0) {
+                                <div class="list-group-item text-muted">No .app files found.</div>
+                            } else {
+                                @foreach(var f in Files) {
+                                    var active = f.RelativePath == SelectedPath ? "active" : "";
+                                    <button type="button" class="list-group-item list-group-item-action @active"
+                                            title="@f.RelativePath"
+                                            @onclick="@(() => LoadFile(f.RelativePath))">
+                                        @f.RelativePath
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <div class="col-md-8">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>@(SelectedPath ?? "Select a file")</strong>
+                            </div>
+                            <div>
+                                @if(!IsEditing) {
+                                    <button class="btn btn-secondary" disabled="@(!CanEdit)" @onclick="BeginEdit">
+                                        <Icon Name="Edit" /> Edit
+                                    </button>
+                                } else {
+                                    <button class="btn btn-primary me-2" @onclick="SaveEdits">
+                                        <Icon Name="Save" /> Save
+                                    </button>
+                                    <button class="btn btn-outline-secondary" @onclick="CancelEdits">
+                                        <Icon Name="Back" /> Cancel
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div>
+                            @if(string.IsNullOrWhiteSpace(SelectedPath)) {
+                                <div class="text-muted">Choose a file from the list to view.</div>
+                            } else {
+                                <!-- Monaco editor usage aligned with the working /Monaco page -->
+                                <div class="mb-2">
+                                    <label for="@_monacoId">Monaco Editor</label>
+                                    <MonacoEditor Id="@_monacoId"
+                                                  Language="@MonacoLanguageEnum"
+                                                  PlaceholderText="File content will appear here"
+                                                  ReadOnly="@_monacoReadOnly"
+                                                  ValueToDiff="@_monacoContentToDiff"
+                                                  @bind-Value="EditorText" />
+                                </div>
+
+                                <div class="mb-2 form-check form-switch">
+                                    <input type="checkbox" role="switch" class="form-check-input" id="monaco-read-only" @bind="_monacoReadOnly" />
+                                    <label for="monaco-read-only" class="form-check-label">Read-Only Editor</label>
+                                </div>
+
+                                <div><b>Content (preview):</b></div>
+                                <div><textarea class="form-control" style="height:200px;">@EditorText</textarea></div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
 }
 
 @code {
     protected string _pageName = "home";
 
-    public void Dispose() { 
+    // ----- State -----
+    private string RepoUrl { get; set; } = "https://github.com/WSU-EIT/FreeManager.git";
+    private string RepoId { get; set; } = string.Empty;
+    private List<DataObjects.AppRepoFileItem> Files { get; set; } = new();
+    private string? SelectedPath { get; set; }
+    private string EditorText { get; set; } = string.Empty;
+    private string OriginalText { get; set; } = string.Empty;
+    private bool IsEditing { get; set; } = false;
+    private bool IsBusy { get; set; } = false;
+    private List<string> Messages { get; set; } = new();
+
+    // Monaco alignment with working sample
+    private readonly string _monacoId = "repo-editor";               // stable id per component instance
+    private bool _monacoReadOnly = false;                            // toggle like the sample
+    private string _monacoContentToDiff = string.Empty;              // not used for save, but keeps API parity
+    private string MonacoLanguageEnum => InferLanguageEnum(SelectedPath);
+
+    public void Dispose()
+    {
         Model.OnChange -= OnDataModelUpdated;
     }
 
@@ -29,23 +150,143 @@
         Model.OnChange += OnDataModelUpdated;
     }
 
-    protected void OnDataModelUpdated() {
-        if (Model.View == _pageName) {
+    protected void OnDataModelUpdated()
+    {
+        if(Model.View == _pageName) {
             StateHasChanged();
         }
     }
 
-    public async Task LoadData() {
+    public async Task LoadData()
+    {
         // Perform any app-specific data loading here.
     }
 
     protected string LogoUrl {
         get {
-            if (Model.Tenant.TenantSettings.Logo.HasValue && Model.Tenant.TenantSettings.Logo != Guid.Empty) {
+            if(Model.Tenant.TenantSettings.Logo.HasValue && Model.Tenant.TenantSettings.Logo != Guid.Empty) {
                 return Model.ApplicationUrl + "File/View/" + ((Guid)Model.Tenant.TenantSettings.Logo).ToString();
             } else {
                 return String.Empty;
             }
         }
+    }
+
+    // ----- Actions -----
+
+    private async Task CloneRepo()
+    {
+        IsBusy = true;
+        Messages.Clear();
+        Files.Clear();
+        SelectedPath = null;
+        EditorText = OriginalText = string.Empty;
+        _monacoContentToDiff = string.Empty;
+        IsEditing = false;
+
+        var body = new DataObjects.AppRepoCloneRequest { RepoUrl = RepoUrl };
+        // Root-relative (avoid "~/" 405)
+        var result = await Helpers.GetOrPost<DataObjects.AppRepoCloneResponse>("api/AppRepo/Clone", body);
+
+        if(result != null) {
+            RepoId = result.RepoId ?? string.Empty;
+            Files = result.Files ?? new();
+            if(result.Messages?.Count > 0)
+                Messages.AddRange(result.Messages);
+        } else {
+            Messages.Add("No response from server.");
+            RepoId = string.Empty;
+        }
+
+        IsBusy = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadFile(string relativePath)
+    {
+        if(string.IsNullOrWhiteSpace(RepoId))
+            return;
+
+        SelectedPath = relativePath;
+        IsEditing = false;
+        _monacoReadOnly = true; // default to read-only on load (like the sample’s toggle)
+
+        var req = new DataObjects.AppRepoFileContentRequest {
+                RepoId = RepoId,
+                RelativePath = relativePath
+            };
+
+        var result = await Helpers.GetOrPost<DataObjects.AppRepoFileContentResponse>("api/AppRepo/Content", req);
+        if(result != null && result.Result) {
+            EditorText = result.Content ?? string.Empty;
+            OriginalText = EditorText;
+            _monacoContentToDiff = EditorText; // keeps the diff API happy
+        } else {
+            EditorText = string.Empty;
+            OriginalText = string.Empty;
+            _monacoContentToDiff = string.Empty;
+            Messages.Clear();
+            if(result?.Messages?.Count > 0)
+                Messages.AddRange(result.Messages);
+            else
+                Messages.Add("Failed to load file.");
+        }
+
+        StateHasChanged();
+    }
+
+    private bool CanEdit => !string.IsNullOrWhiteSpace(SelectedPath) && !IsBusy;
+
+    private void BeginEdit()
+    {
+        if(!CanEdit)
+            return;
+        IsEditing = true;
+        _monacoReadOnly = false;
+    }
+
+    // “Save” just discards changes and returns to read-only, per requirements.
+    private void SaveEdits()
+    {
+        EditorText = OriginalText;
+        IsEditing = false;
+        _monacoReadOnly = true;
+    }
+
+    private void CancelEdits()
+    {
+        EditorText = OriginalText;
+        IsEditing = false;
+        _monacoReadOnly = true;
+    }
+
+    // Map file extension to Monaco enum supported by our component.
+    // IMPORTANT: Default to HTML (not plaintext) — some builds of our Monaco wrapper
+    // don’t expose a 'plaintext' enum member, which caused the null-ref previously.
+    private static string InferLanguageEnum(string? path)
+    {
+        if(string.IsNullOrWhiteSpace(path))
+            return MonacoEditor.MonacoLanguage.html;
+
+        var lower = path.ToLowerInvariant();
+
+        if(lower.EndsWith(".cs"))
+            return MonacoEditor.MonacoLanguage.csharp;
+        if(lower.EndsWith(".json"))
+            return MonacoEditor.MonacoLanguage.json;
+        if(lower.EndsWith(".md"))
+            return MonacoEditor.MonacoLanguage.markdown;
+        if(lower.EndsWith(".ts"))
+            return MonacoEditor.MonacoLanguage.typescript;
+        if(lower.EndsWith(".js"))
+            return MonacoEditor.MonacoLanguage.javascript;
+        if(lower.EndsWith(".css"))
+            return MonacoEditor.MonacoLanguage.css;
+        if(lower.EndsWith(".razor") ||
+            lower.EndsWith(".html") ||
+            lower.EndsWith(".htm"))
+            return MonacoEditor.MonacoLanguage.html;
+
+        return MonacoEditor.MonacoLanguage.html;
     }
 }
