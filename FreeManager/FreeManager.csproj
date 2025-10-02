@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 	<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-	<UserSecretsId>02b219a6-b879-455e-ae57-0e596c114589</UserSecretsId>
+	<UserSecretsId>ec1273a5-f0c8-4687-9401-93cffbd13a9c</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +16,7 @@
     <ProjectReference Include="..\FreeManager.DataAccess\FreeManager.DataAccess.csproj" />
     <ProjectReference Include="..\FreeManager.Client\FreeManager.Client.csproj" />
     <ProjectReference Include="..\FreeManager.Plugins\FreeManager.Plugins.csproj" />
-    <PackageReference Include="AspNet.Security.OAuth.Apple" Version="9.4.0" />
+    <PackageReference Include="AspNet.Security.OAuth.Apple" Version="9.4.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Facebook" Version="9.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="9.0.9" />
