@@ -17,10 +17,10 @@
         <Language Tag="Welcome" ReplaceSpaces="true" /> @Model.User.FirstName
     </h1>
 
-    <!-- App Repo Explorer -->
+    <!-- Repo Explorer -->
     <div class="card mt-3">
         <div class="card-header">
-            <strong>.app File Explorer (from Public Git Repo)</strong>
+            <strong>Repository Explorer (from Public Git Repo)</strong>
         </div>
         <div class="card-body">
             <div class="row g-2 align-items-end">
@@ -52,17 +52,127 @@
             @if(!string.IsNullOrWhiteSpace(RepoId)) {
                 <div class="row mt-3">
                     <div class="col-md-4">
-                        <div class="mb-2"><strong>*.app.* Files</strong></div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>Repository Files</strong>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => showFilters = !showFilters">
+                                @(showFilters ? "Hide Filters" : "Show Filters")
+                            </button>
+                        </div>
+
+                        <!-- NEW: Sorting options -->
+                        <section class="mb-2">
+                            <div class="row g-2">
+                                <div class="col-7">
+                                    <label for="sortOption" class="form-label form-label-sm">Sort by</label>
+                                    <select id="sortOption" class="form-select form-select-sm" @bind="SortOption">
+                                        <option value="Name">Name</option>
+                                        <option value="Path">Path</option>
+                                    </select>
+                                </div>
+                                <div class="col-5">
+                                    <label for="sortDirection" class="form-label form-label-sm">Order</label>
+                                    <select id="sortDirection" class="form-select form-select-sm" @bind="SortDirection">
+                                        <option value="asc">Ascending</option>
+                                        <option value="desc">Descending</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- NEW: Counters (visible/selected/hidden + extension counts) -->
+                        <section class="mb-2">
+                            <div class="row text-center small">
+                                <div class="col">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                    <div>@VisibleCount visible</div>
+                                </div>
+                                <div class="col">
+                                    <i class="fa-solid fa-check"></i>
+                                    <div>@SelectedCount selected</div>
+                                </div>
+                                <div class="col">
+                                    <i class="fa-solid fa-eye-slash"></i>
+                                    <div>@HiddenCount hidden</div>
+                                </div>
+                                <div class="col">
+                                    <i class="fa-solid fa-code"></i>
+                                    <div>@GetExtensionCount(".cs") .cs</div>
+                                </div>
+                                <div class="col">
+                                    <i class="fa-solid fa-file-code"></i>
+                                    <div>@GetExtensionCount(".razor") .razor</div>
+                                </div>
+                                <div class="col">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                    <div>@GetExtensionCount(".cshtml") .cshtml</div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Inline Filters (no separate component) -->
+                        <div class="border rounded p-2 mb-2 @(showFilters ? "" : "d-none")">
+                            <div class="mb-2">
+                                <label class="form-label">Plain Text Filter</label>
+                                <input class="form-control form-control-sm" placeholder="text in path..."
+                                       @bind="plainTextFilter" @bind:event="oninput" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">Wildcard Filter (e.g. *.cs, */Client/*)</label>
+                                <input class="form-control form-control-sm" placeholder="*.cs"
+                                       @bind="wildcardFilter" @bind:event="oninput" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">File Types</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach(var ext in fileTypes) {
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" id="ft_@ext.Replace(".", "_")"
+                                                   @onchange="e => ToggleFileType(ext, (bool)e.Value!)"
+                                                   checked="@selectedFileTypes.Contains(ext)" />
+                                            <label class="form-check-label" for="ft_@ext.Replace(".", "_")">@ext</label>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="input-group input-group-sm mt-2">
+                                    <input class="form-control" placeholder="Add file type (e.g. .yml)"
+                                           @bind="customFileType" />
+                                    <button class="btn btn-outline-secondary" @onclick="AddCustomFileType">Add</button>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">Ignored Folders</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach(var folder in ignoredFolders) {
+                                        <span class="badge bg-secondary">
+                                            @folder
+                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1"
+                                                    aria-label="Remove"
+                                                    @onclick="() => RemoveIgnoredFolder(folder)"></button>
+                                        </span>
+                                    }
+                                </div>
+                                <div class="input-group input-group-sm mt-2">
+                                    <input class="form-control" placeholder="Add ignored folder (e.g. node_modules)"
+                                           @bind="customIgnoredFolder" />
+                                    <button class="btn btn-outline-secondary" @onclick="AddIgnoredFolder">Add</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtered list -->
                         <div class="list-group small" style="max-height: 420px; overflow:auto;">
-                            @if(Files.Count == 0) {
-                                <div class="list-group-item text-muted">No .app files found.</div>
+                            @if(!FilteredPaths.Any()) {
+                                <div class="list-group-item text-muted">No files match current filters.</div>
                             } else {
-                                @foreach(var f in Files) {
-                                    var active = f.RelativePath == SelectedPath ? "active" : "";
+                                @foreach(var relPath in FilteredPaths) {
+                                    var active = relPath == SelectedPath ? "active" : "";
                                     <button type="button" class="list-group-item list-group-item-action @active"
-                                            title="@f.RelativePath"
-                                            @onclick="@(() => LoadFile(f.RelativePath))">
-                                        @f.RelativePath
+                                            title="@relPath"
+                                            @onclick="@(() => LoadFile(relPath))">
+                                        @relPath
                                     </button>
                                 }
                             }
@@ -80,6 +190,16 @@
                                         <Icon Name="Edit" /> Edit
                                     </button>
                                 } else {
+                                    @if(IsDiff) {
+                                        <button class="btn btn-outline-secondary me-2" @onclick="HideDiff">
+                                            <Icon Name="Back" /> Single
+                                        </button>
+                                    } else {
+                                        <button class="btn btn-outline-secondary me-2" @onclick="ShowDiff" disabled="@(!HasUnsavedChanges)">
+                                            <Icon Name="Compare" /> Diff
+                                        </button>
+                                    }
+
                                     <button class="btn btn-primary me-2" @onclick="SaveEdits">
                                         <Icon Name="Save" /> Save
                                     </button>
@@ -95,23 +215,33 @@
                                 <div class="text-muted">Choose a file from the list to view.</div>
                             } else {
 
-                                <!-- Monaco (re-created when mode changes so ReadOnly applies immediately) -->
-                                <MonacoEditor @ref="monacoEditor"
-                                              @key="@($"{SelectedPath}-{(IsEditing ? "edit" : "ro")}")"
-                                              Id="view-source-monaco-editor"
-                                              Language="@CurrentLanguage"
-                                              ReadOnly="@(!IsEditing)"
-                                              Timeout="500"
-                                              Value="@EditorText" />
+                                @if(!IsDiff) {
+                                    <!-- Single view -->
+                                    <textarea id="code-editor"
+                                              class="form-control"
+                                              rows="26"
+                                              readonly="@(!IsEditing)"
+                                              @bind="EditorText"
+                                              @bind:event="oninput"></textarea>
+                                } else {
+                                    <!-- Diff view: left original (readonly), right live (editable if editing) -->
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <div class="small text-muted mb-1">Original</div>
+                                            <textarea class="form-control" rows="26" readonly>@OriginalText</textarea>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="small text-muted mb-1">Modified</div>
+                                            <textarea class="form-control" rows="26" readonly="@(!IsEditing)"
+                                                      @bind="EditorText" @bind:event="oninput"></textarea>
+                                        </div>
+                                    </div>
+                                }
 
                                 <div class="small text-muted mt-2">
                                     Language: <code>@CurrentLanguage</code>
-                                    @if(IsEditing) {
-                                        <span> · Editing</span>
-                                    } else {
-
-                                        <span> · Read-only</span>
-                                    }
+                                    <span> · @(IsEditing ? "Editing" : "Read-only")</span>
+                                    <span> · Mode: @(IsDiff ? "Diff" : "Single")</span>
                                 </div>
                             }
                         </div>
@@ -132,33 +262,59 @@
     private string? SelectedPath { get; set; }
     private string EditorText { get; set; } = string.Empty;
     private string OriginalText { get; set; } = string.Empty;
+
+    // Diff baseline (null => single)
+    private string? DiffBaseline { get; set; } = null;
+
     private bool IsEditing { get; set; } = false; // default read-only
     private bool IsBusy { get; set; } = false;
     private List<string> Messages { get; set; } = new();
 
-    // Optional focus helpers from your earlier snippet
+    // Focus helpers (kept; no Monaco calls)
     [Parameter] public int? FocusLine { get; set; }
     [Parameter] public int? FocusColumn { get; set; }
     [Parameter] public string? IntroMessage { get; set; }
-    [Parameter] public string Language { get; set; } = MonacoEditor.MonacoLanguage.html;
+    [Parameter] public string Language { get; set; } = MonacoLanguage.html; // using our local constants below
     [Parameter] public string Source { get; set; } = String.Empty;
 
-    MonacoEditor monacoEditor = null!;
+    // --- Inline Filter State (no external component) ---
+    private bool showFilters = false;
+    private List<string> fileTypes = new() { ".cs", ".razor", ".cshtml", ".md", ".js", ".css", ".ts", ".json", ".html", ".xml", ".scss" };
+    private HashSet<string> selectedFileTypes = new(new[] { ".cs", ".razor", ".cshtml", ".md" });
+    private string customFileType = "";
+    private string plainTextFilter = "";
+    private string wildcardFilter = "";
+    private List<string> ignoredFolders = new() { "bin", "obj", ".git", "fontawesome", "bootstrap" }; // added defaults
+    private string customIgnoredFolder = "";
+
+    // NEW: Sorting state
+    private string _sortOption = "Name";
+    private string SortOption {
+        get => _sortOption;
+        set { if(_sortOption != value) { _sortOption = value; StateHasChanged(); } }
+    }
+    private string _sortDirection = "asc";
+    private string SortDirection {
+        get => _sortDirection;
+        set { if(_sortDirection != value) { _sortDirection = value; StateHasChanged(); } }
+    }
+
+    // NEW: Counter helpers
+    private int VisibleCount => FilteredPaths.Count();
+    private int SelectedCount => string.IsNullOrWhiteSpace(SelectedPath) ? 0 : (FilteredPaths.Contains(SelectedPath) ? 1 : 0);
+    private int HiddenCount => (Files?.Count ?? 0) - VisibleCount;
+    private int GetExtensionCount(string ext) => FilteredPaths.Count(p => p.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
+        // Optional: set focus into the textarea on first render when FocusLine/Column provided
         if(FocusLine.HasValue) {
-            int line = FocusLine.Value;
-            int column = FocusColumn.HasValue ? FocusColumn.Value : 1;
-
-            Helpers.SetTimeout(async () => {
-                await monacoEditor.Editor.RevealLineInCenter(line, BlazorMonaco.Editor.ScrollType.Immediate);
-                await monacoEditor.Editor.SetPosition(new BlazorMonaco.Position {
-                    LineNumber = line,
-                    Column = column,
-                }, "");
-                await monacoEditor.Editor.Focus();
-            }, 500);
+            _ = Task.Run(async () => {
+                await Task.Delay(500);
+                try {
+                    await JS.InvokeVoidAsync("document.getElementById", "code-editor");
+                } catch { /* ignore if not present yet */ }
+            });
         }
     }
 
@@ -204,6 +360,7 @@
         SelectedPath = null;
         EditorText = OriginalText = string.Empty;
         IsEditing = false;
+        DiffBaseline = null; // ensure single
 
         var body = new DataObjects.AppRepoCloneRequest { RepoUrl = RepoUrl };
         // Root-relative (avoid "~/" 405)
@@ -229,7 +386,8 @@
             return;
 
         SelectedPath = relativePath;
-        IsEditing = false; // load in read-only
+        IsEditing = false; // load read-only
+        DiffBaseline = null; // single mode
 
         var req = new DataObjects.AppRepoFileContentRequest {
             RepoId = RepoId,
@@ -250,11 +408,6 @@
                 Messages.Add("Failed to load file.");
         }
 
-        // ensure Monaco shows the latest content
-        if(monacoEditor is not null) {
-            await monacoEditor.SetValue(EditorText);
-        }
-
         StateHasChanged();
     }
 
@@ -268,36 +421,25 @@
         IsEditing = true;
 
         // focus the editor after it re-renders in editable mode
-        Helpers.SetTimeout(async () => {
-            if(monacoEditor is not null && monacoEditor.Editor is not null) {
-                await monacoEditor.Editor.Focus();
-            }
-        }, 100);
+        await Task.Delay(100);
+        try { await JS.InvokeVoidAsync("document.getElementById", "code-editor"); } catch { }
     }
 
     // Save: log current editor contents and return to read-only (no server write yet)
     private async Task SaveEdits()
     {
-        // grab the live value from Monaco
-        var current = monacoEditor is not null ? await monacoEditor.GetValue() : EditorText;
-
-        EditorText = current;
-        OriginalText = current;
+        // EditorText already bound live
+        OriginalText = EditorText;
 
         // log to the browser console
         await JS.InvokeVoidAsync("console.log", "[Repo Save] (not persisted)", new {
             path = SelectedPath,
-            length = current?.Length ?? 0
+            length = (EditorText?.Length ?? 0)
         });
-        await JS.InvokeVoidAsync("console.log", current);
+        await JS.InvokeVoidAsync("console.log", EditorText);
 
         IsEditing = false; // back to read-only
-
-        // reapply value to ensure the read-only instance shows the latest text
-        if(monacoEditor is not null) {
-            await monacoEditor.SetValue(EditorText);
-        }
-
+        DiffBaseline = null; // back to single view
         StateHasChanged();
     }
 
@@ -306,13 +448,9 @@
         // discard in-memory edits and restore original text
         EditorText = OriginalText;
         IsEditing = false;
-
-        if(monacoEditor is not null) {
-            await monacoEditor.SetValue(EditorText);
-            await monacoEditor.ReadOnly = true;
-        }
-
+        DiffBaseline = null; // ensure single view
         StateHasChanged();
+        await Task.CompletedTask;
     }
 
     // ---- Helpers ----
@@ -322,26 +460,148 @@
     private static string GetLanguageForPath(string? path)
     {
         if(string.IsNullOrWhiteSpace(path))
-            return MonacoEditor.MonacoLanguage.plaintext;
+            return MonacoLanguage.plaintext;
 
         var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
 
         return ext switch {
-            ".htm" or ".html" => MonacoEditor.MonacoLanguage.html,
-            ".js" => MonacoEditor.MonacoLanguage.javascript,
-            ".ts" => MonacoEditor.MonacoLanguage.typescript,
-            ".css" => MonacoEditor.MonacoLanguage.css,
-            ".scss" => MonacoEditor.MonacoLanguage.scss,
-            ".json" => MonacoEditor.MonacoLanguage.json,
-            ".xml" => MonacoEditor.MonacoLanguage.xml,
-            ".yml" or ".yaml" => MonacoEditor.MonacoLanguage.yaml,
-            ".md" or ".markdown" => MonacoEditor.MonacoLanguage.markdown,
-            ".sql" => MonacoEditor.MonacoLanguage.sql,
-            ".cs" => MonacoEditor.MonacoLanguage.csharp,
-            ".razor" => MonacoEditor.MonacoLanguage.razor,
-            ".php" => MonacoEditor.MonacoLanguage.php,
-            ".py" => MonacoEditor.MonacoLanguage.python,
-            _ => MonacoEditor.MonacoLanguage.plaintext
+            ".htm" or ".html" => MonacoLanguage.html,
+            ".js" => MonacoLanguage.javascript,
+            ".ts" => MonacoLanguage.typescript,
+            ".css" => MonacoLanguage.css,
+            ".scss" => MonacoLanguage.scss,
+            ".json" => MonacoLanguage.json,
+            ".xml" => MonacoLanguage.xml,
+            ".yml" or ".yaml" => MonacoLanguage.yaml,
+            ".md" or ".markdown" => MonacoLanguage.markdown,
+            ".sql" => MonacoLanguage.sql,
+            ".cs" => MonacoLanguage.csharp,
+            ".razor" => MonacoLanguage.razor,
+            ".php" => MonacoLanguage.php,
+            ".py" => MonacoLanguage.python,
+            _ => MonacoLanguage.plaintext
         };
+    }
+
+    private bool IsDiff => !string.IsNullOrEmpty(DiffBaseline);
+    private bool HasUnsavedChanges => !string.Equals(EditorText, OriginalText, StringComparison.Ordinal);
+
+    private void ShowDiff()
+    {
+        // set baseline to original; modified = EditorText (live)
+        DiffBaseline = OriginalText;
+    }
+
+    private void HideDiff()
+    {
+        DiffBaseline = null;
+    }
+
+    // -------- Inline filter logic --------
+    private IEnumerable<string> FilteredPaths {
+        get {
+            IEnumerable<string> paths = Files.Select(f => f.RelativePath);
+
+            // file type filter
+            if(selectedFileTypes.Any()) {
+                paths = paths.Where(p => selectedFileTypes.Contains(System.IO.Path.GetExtension(p).ToLowerInvariant()));
+            }
+
+            // wildcard filter
+            if(!string.IsNullOrWhiteSpace(wildcardFilter)) {
+                paths = paths.Where(p => IsWildcardMatch(p, wildcardFilter));
+            }
+
+            // plain text filter
+            if(!string.IsNullOrWhiteSpace(plainTextFilter)) {
+                paths = paths.Where(p => p.IndexOf(plainTextFilter, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            // ignored folders
+            if(ignoredFolders.Any()) {
+                paths = paths.Where(p => !ignoredFolders.Any(f => p.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0));
+            }
+
+            // sorting
+            paths = SortOption switch {
+                "Path" => (SortDirection == "asc")
+                    ? paths.OrderBy(p => p)
+                    : paths.OrderByDescending(p => p),
+                _ => // "Name"
+                    (SortDirection == "asc")
+                    ? paths.OrderBy(p => System.IO.Path.GetFileName(p))
+                    : paths.OrderByDescending(p => System.IO.Path.GetFileName(p))
+            };
+
+            return paths;
+        }
+    }
+
+    private void ToggleFileType(string type, bool isChecked)
+    {
+        type = type.ToLowerInvariant();
+        if(isChecked)
+            selectedFileTypes.Add(type);
+        else
+            selectedFileTypes.Remove(type);
+        StateHasChanged();
+    }
+
+    private void AddCustomFileType()
+    {
+        var t = (customFileType ?? "").Trim().ToLowerInvariant();
+        if(!string.IsNullOrWhiteSpace(t)) {
+            if(!fileTypes.Contains(t))
+                fileTypes.Add(t);
+            selectedFileTypes.Add(t);
+            customFileType = "";
+            StateHasChanged();
+        }
+    }
+
+    private void AddIgnoredFolder()
+    {
+        var folder = (customIgnoredFolder ?? "").Trim();
+        if(!string.IsNullOrWhiteSpace(folder) && !ignoredFolders.Contains(folder, StringComparer.OrdinalIgnoreCase)) {
+            ignoredFolders.Add(folder);
+            customIgnoredFolder = "";
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveIgnoredFolder(string folder)
+    {
+        ignoredFolders.RemoveAll(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase));
+        StateHasChanged();
+    }
+
+    private static bool IsWildcardMatch(string text, string pattern)
+    {
+        if(string.IsNullOrEmpty(pattern))
+            return true;
+        var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+            .Replace("\\*", ".*")
+            .Replace("\\?", ".") + "$";
+        return System.Text.RegularExpressions.Regex.IsMatch(text, regexPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    // --- Monaco language constants kept locally so callers using your constants still compile ---
+    public static class MonacoLanguage
+    {
+        public const string plaintext = "plaintext";
+        public const string html = "html";
+        public const string javascript = "javascript";
+        public const string typescript = "typescript";
+        public const string css = "css";
+        public const string scss = "scss";
+        public const string json = "json";
+        public const string xml = "xml";
+        public const string yaml = "yaml";
+        public const string markdown = "markdown";
+        public const string sql = "sql";
+        public const string csharp = "csharp";
+        public const string razor = "razor";
+        public const string php = "php";
+        public const string python = "python";
     }
 }
