@@ -335,11 +335,6 @@
         }
     }
 
-    public async Task LoadData()
-    {
-        // Perform any app-specific data loading here.
-    }
-
     protected string LogoUrl {
         get {
             if(Model.Tenant.TenantSettings.Logo.HasValue && Model.Tenant.TenantSettings.Logo != Guid.Empty) {
