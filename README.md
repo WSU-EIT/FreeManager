@@ -1,167 +1,432 @@
-﻿# One-paragraph
+# FreeManager
 
-We’re adding a self-contained “.app file explorer” to the FreeManager app that lives entirely in the existing extension points—no framework changes. The feature introduces a new `Index.app.razor` page that lists all `*.app.*` files in the repo and previews their contents with the built-in Monaco editor, plus a small `DataController.App.*.cs` partial that exposes read-only endpoints to enumerate and fetch those files. This gives us a safe, non-invasive foundation for later in-browser editing while keeping to the core rule: only touch `.app.` files or add new ones.
+An open-source CRM solution built in **C# Blazor WebAssembly** using **.NET 10**. Based on the [FreeCRM](https://github.com/WSU-EIT/FreeCRM) framework.
 
----
+You can use this project as-is, customize it to fit your needs, or grab the code you need for your own project.
 
-# Two paragraphs
+## Technology Stack
 
-The goal is to centralize all app-specific customization inside `.app.` files and provide a first-class UI to discover and view them. We’ll add an `Index.app.razor` component that scans for `*.app.*` files, groups them by folder, and shows a Monaco preview of the selected file. On the server, we’ll add a small `DataController.App.{Feature}.cs` partial with minimal endpoints—`/api/AppFiles/List` and `/api/AppFiles/Contents`—that are path-validated and read-only. This mirrors the existing extension pattern and avoids any modification to the base framework or shared plumbing.
+### Backend
+| Technology | Purpose |
+|------------|---------|
+| **.NET 10** | Runtime and SDK |
+| **ASP.NET Core 10** | Web framework and API hosting |
+| **Entity Framework Core 10** | ORM with multi-database support |
+| **SignalR** | Real-time communication |
+| **Azure SignalR Service** | Scalable SignalR hosting |
+| **QuestPDF** | PDF document generation |
 
-Why this matters: teams often inherit the framework (auth, layout, plumbing) but only control the `.app.` layer. By shipping a discoverable, safe, and extensible viewer inside that layer, we accelerate onboarding, reduce “where is this customized?” time, and create a natural place to evolve toward editing, diffs, and git workflow—all without touching the core. It’s a pragmatic, low-risk step that immediately helps today and sets us up for tomorrow.
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| **Blazor WebAssembly** | Client-side SPA framework |
+| **MudBlazor** | Material Design components |
+| **Radzen.Blazor** | Additional UI components |
+| **Blazor.Bootstrap** | Bootstrap components |
+| **BlazorMonaco** | Code editor component |
+| **Blazored.LocalStorage** | Client-side storage |
 
----
+### Database Support
+| Database | Package |
+|----------|---------|
+| **SQL Server** | Microsoft.EntityFrameworkCore.SqlServer |
+| **PostgreSQL** | Npgsql.EntityFrameworkCore.PostgreSQL |
+| **MySQL** | MySql.EntityFrameworkCore |
+| **SQLite** | Microsoft.EntityFrameworkCore.Sqlite |
+| **In-Memory** | Microsoft.EntityFrameworkCore.InMemory |
 
-# One-page
+### Authentication Providers
+- Google
+- Facebook
+- Microsoft Account
+- Apple
+- OpenID Connect
+- Active Directory / LDAP
 
-## What we’re doing
+## Modular Architecture
 
-We’re implementing a self-contained “.app file explorer” inside FreeManager that lists and previews all `*.app.*` files in the repository. The UI lives in a new `Index.app.razor` page and uses Monaco for read-only viewing. A small server-side `DataController.App.{Feature}.cs` partial provides two endpoints for listing and fetching files. Everything is additive and constrained to the `.app.` layer—no framework code is modified.
+FreeCRM is designed as a **modular, extensible framework**. You can build completely different applications on top of it (like [FreeCICD](https://github.com/WSU-EIT/FreeCICD) for CI/CD pipelines) while maintaining the ability to receive upstream updates.
 
-## Why we’re doing it
+### The `.App.` File Convention
 
-FreeManager’s architecture intentionally isolates product customization in `.app.` files so multiple solutions can share a common framework (auth, API wiring, layouts). In practice, engineers spend time hunting for those customization points across projects. By surfacing a built-in explorer and previewer:
+The framework uses **partial classes** and a **file naming convention** to separate:
 
-* New contributors can immediately see “what’s actually customized here.”
-* Reviewers get one place to sanity-check changes.
-* We lay groundwork for future editing/diff without architecture churn.
+| File Pattern | Purpose | Should You Modify? |
+|--------------|---------|-------------------|
+| `*.cs` / `*.razor` | Core framework code | **Never** - updates will overwrite |
+| `*.App.cs` / `*.App.razor` | Customization hooks | **Extend** - add code, don't remove |
+| `*.App.{ProjectName}.cs` | Your project code | **Yes** - this is where your code lives |
 
-## Design constraints
+### How It Works
 
-* **Zero framework changes**: only add or edit `.app.` files.
-* **Security first**: server validates all paths against the content root; no directory traversal; only `*.app.*` files are returned.
-* **Minimal surface**: two endpoints—`/api/AppFiles/List` and `/api/AppFiles/Contents`—and one page—`Index.app.razor`.
-* **Familiar patterns**: reuse the existing `Helpers.GetOrPost<T>` pattern and Monaco component already present in the stack.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Your Project Code                            │
+│              *.App.{ProjectName}.cs files                       │
+│         (Add new methods, DTOs, endpoints, UI)                  │
+├─────────────────────────────────────────────────────────────────┤
+│                   Customization Hooks                            │
+│                    *.App.cs files                               │
+│    (Template methods called by core, language strings)          │
+├─────────────────────────────────────────────────────────────────┤
+│                    Core Framework                                │
+│                     *.cs files                                  │
+│         (Don't modify - receives upstream updates)              │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## How it works (high level)
+### Extension Points by Layer
 
-* **Server (partial controller):**
+#### DataObjects (`CRM.DataObjects/`)
+```
+DataObjects.cs              # Core DTOs (don't modify)
+DataObjects.App.cs          # Add custom DTOs and extend existing ones
+DataObjects.App.MyProject.cs # Your project-specific DTOs
+GlobalSettings.App.cs       # App name, version, configuration
+```
 
-  * `GET /api/AppFiles/List` enumerates `*.app.*` under the content root (excluding `bin/`, `obj/`, `.git/`, `node_modules/`, and typically `wwwroot/`), returning `FileName`, relative `FullPath`, and basic metrics (lines, chars).
-  * `POST /api/AppFiles/Contents` accepts a list of relative paths, validates each path stays under the content root and matches the `.app.` pattern, and returns file contents.
+**Example - Extending a DTO:**
+```csharp
+// In DataObjects.App.MyProject.cs
+public partial class DataObjects
+{
+    // Extend existing User class
+    public partial class User
+    {
+        public string? MyCustomProperty { get; set; }
+    }
 
-* **Client (Index.app.razor):**
+    // Add new DTOs
+    public class MyNewFeature
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+    }
+}
+```
 
-  * Loads the list, groups by folder, filters by path/name, and shows Monaco read-only preview for the selected file.
-  * UI is intentionally simple and fast; later we can add Save/Diff without reshaping the page.
+#### DataAccess (`CRM.DataAccess/`)
+```
+DataAccess.cs               # Core data methods (don't modify)
+DataAccess.App.cs           # Hooks: DataAccessAppInit(), GetBlazorDataModelApp(), etc.
+DataAccess.App.MyProject.cs # Your business logic and data methods
+```
 
-## Non-goals (for this phase)
+**Available Hooks in `DataAccess.App.cs`:**
+| Hook Method | Purpose |
+|-------------|---------|
+| `DataAccessAppInit()` | Initialize app-specific services |
+| `GetBlazorDataModelApp()` | Load custom data into Blazor model |
+| `DeleteAllPendingDeletedRecordsApp()` | Custom soft-delete cleanup |
+| `GetFilterColumnsApp()` | Add custom filter columns |
+| `AppLanguage` dictionary | Custom language/localization strings |
 
-* Editing/saving changes, git commits, or PR automation.
-* Searching across non-`.app.` files or exposing raw framework internals.
+#### Controllers (`CRM/Controllers/`)
+```
+DataController.cs           # Core API endpoints (don't modify)
+DataController.App.cs       # Hook for custom endpoints
+DataController.App.MyProject.cs # Your API endpoints
+```
 
-## Roadmap (next steps)
+**Example - Adding API Endpoints:**
+```csharp
+// In DataController.App.MyProject.cs
+public partial class DataController
+{
+    [HttpGet]
+    [Route("api/Data/GetMyFeatures")]
+    public async Task<ActionResult<List<DataObjects.MyFeature>>> GetMyFeatures()
+    {
+        return await _da.GetMyFeatures();
+    }
+}
+```
 
-1. **Save + Diff**: add `/api/AppFiles/Save` with optimistic concurrency; enable Monaco write mode.
-2. **Search & Replace**: server-side grep with match previews and navigation.
-3. **Git QoL**: surface `git status/diff` for `.app.` files; quick commit from UI.
-4. **Live reload**: SignalR notifications when files change on disk.
+#### UI Components (`CRM.Client/Shared/AppComponents/`)
+```
+Index.App.razor             # Custom home page content
+About.App.razor             # Custom about page
+Settings.App.razor          # App-specific settings
+EditUser.App.razor          # User form extensions
+```
 
----
+#### Styling (`CRM.Client/wwwroot/css/`)
+```
+site.css                    # Core styles (don't modify)
+site.App.css                # Your custom styles
+```
 
-# Full write-up (README style)
+### Creating a New Project
 
-## Overview
+```bash
+# 1. Clone FreeCRM
+git clone https://github.com/WSU-EIT/FreeCRM.git MyProject
+cd MyProject
 
-This feature adds an in-app explorer for `.app.` customization files in FreeManager. It lists every `*.app.*` file, groups by folder, and displays a read-only preview using Monaco. The implementation is **fully additive** and respects the project rule: **do not modify the base framework**—only add or adjust `.app.` files.
+# 2. Rename everything to your project name
+"Rename FreeCRM.exe" MyProject
 
-## Rationale
+# 3. Remove modules you don't need
+"Remove Modules from FreeCRM.exe" remove:Invoices,Payments,Appointments
 
-* **Clarity**: Immediately see what’s customized in this deployment without spelunking.
-* **Onboarding**: New teammates can orient faster by browsing all `.app.` touchpoints.
-* **Extensibility**: Establishes the natural home for future in-browser editing, diffs, and git operations.
-* **Safety**: Stays within the guardrails (path validation, read-only first) and doesn’t couple to framework internals.
+# 4. Create your project-specific files:
+#    - MyProject.DataObjects/DataObjects.App.MyProject.cs
+#    - MyProject.DataAccess/DataAccess.App.MyProject.cs
+#    - MyProject/Controllers/DataController.App.MyProject.cs
 
-## Scope & Non-Goals
+# 5. Update GlobalSettings.App.cs with your app info
 
-**In scope**
+# 6. Customize UI in *.App.razor files
+```
 
-* A new page `Index.app.razor` that lists and previews `.app.` files.
-* A small server partial controller exposing:
+### Real-World Example: FreeCICD
 
-  * `GET /api/AppFiles/List`
-  * `POST /api/AppFiles/Contents`
-* File enumeration limited to `*.app.*` under the content root, excluding `bin`, `obj`, `.git`, `node_modules` (and typically `wwwroot` assets).
+[FreeCICD](https://github.com/WSU-EIT/FreeCICD) is a CI/CD pipeline management tool built on FreeCRM:
 
-**Out of scope (initially)**
+| What They Did | How |
+|---------------|-----|
+| Renamed project | `Rename FreeCRM.exe FreeCICD` |
+| Removed CRM modules | `Remove Modules... remove:Invoices,Payments,...` |
+| Added Azure DevOps integration | `DataAccess.App.FreeCICD.cs` |
+| Added DevOps DTOs | `DataObjects.App.FreeCICD.cs` |
+| Added pipeline endpoints | `DataController.App.FreeCICD.cs` |
+| Custom configuration | `GlobalSettings.App.cs` |
 
-* Saving/formatting files, git commits, branching, or PR creation.
-* Modifying framework code or cross-cutting plumbing.
+The result is a completely different application that shares the same authentication, user management, and infrastructure code.
 
-## Architecture
+## Project Structure
 
-### Client
+```
+FreeManager/
+├── CRM/                      # ASP.NET Core server application
+│   ├── Controllers/          # API controllers
+│   │   ├── DataController.cs           # Core endpoints
+│   │   ├── DataController.App.cs       # Extension hooks
+│   │   └── DataController.App.*.cs     # Project-specific
+│   ├── Plugins/              # Server-side plugins
+│   ├── wwwroot/              # Static files
+│   └── Program.cs            # Application entry point
+│
+├── CRM.Client/               # Blazor WebAssembly client
+│   ├── Pages/                # Routable Razor pages
+│   ├── Shared/
+│   │   └── AppComponents/    # *.App.razor customization files
+│   └── wwwroot/
+│       └── css/
+│           ├── site.css      # Core styles
+│           └── site.App.css  # Custom styles
+│
+├── CRM.DataAccess/           # Data access layer
+│   ├── DataAccess.cs         # Core methods
+│   ├── DataAccess.App.cs     # Hooks
+│   └── DataAccess.App.*.cs   # Project-specific
+│
+├── CRM.DataObjects/          # Data transfer objects
+│   ├── DataObjects.cs        # Core DTOs
+│   ├── DataObjects.App.cs    # Extension point
+│   └── GlobalSettings.App.cs # App configuration
+│
+├── CRM.EFModels/             # Entity Framework models
+│   └── EFModels/             # Database entities
+│
+├── CRM.Plugins/              # Plugin system
+│
+├── docs/                     # Documentation
+│   ├── meeting-notes/        # Team discussion notes
+│   └── architecture/         # ADRs
+│
+├── CRM.slnx                  # Solution file
+├── Rename FreeCRM.exe        # Project rename utility
+└── Remove Modules from FreeCRM.exe  # Module removal utility
+```
 
-* **Component**: `Shared/AppComponents/Index.app.razor`
+## Core Modules
 
-* **Responsibilities**:
+| Module | Description | Optional |
+|--------|-------------|----------|
+| **Contacts** | Contact and customer management | No |
+| **Departments** | Department organization | No |
+| **User Groups** | User permissions and grouping | No |
+| **Appointments** | Calendar and scheduling | Yes |
+| **Email Templates** | Email template management | Yes |
+| **Invoices** | Invoice generation and tracking | Yes |
+| **Locations** | Location/address management | Yes |
+| **Payments** | Payment processing | Yes |
+| **Services** | Service catalog | Yes |
+| **Tags** | Tagging and categorization | Yes |
 
-  * Fetch list of `.app.` files (`/api/AppFiles/List`)
-  * Render grouped list with filter
-  * Fetch and preview content for the selected file (`/api/AppFiles/Contents`)
-  * Use Monaco in read-only mode
+## Getting Started
 
-* **UX behaviors**:
+### Prerequisites
 
-  * Deterministic sorting (folder → file)
-  * Simple filter (path or filename substring)
-  * Busy/empty states and safe fallbacks
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Visual Studio 2022 17.12+](https://visualstudio.microsoft.com/) or [VS Code](https://code.visualstudio.com/) with C# Dev Kit
+- Database server (SQL Server, PostgreSQL, MySQL, or SQLite)
 
-### Server
+### Installation
 
-* **Partial controller**: `Controllers/DataController.App.{Feature}.cs`
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/DanielPepka/FreeManager.git
+   cd FreeManager
+   ```
 
-* **Endpoints**:
+2. **Configure the database**
 
-  * `GET /api/AppFiles/List`
-    Returns `[ { FileName, FullPath (relative), LineCount, CharCount } ]`.
-  * `POST /api/AppFiles/Contents`
-    Body: `{ "FilePaths": [ "relative/path/one", ... ] }`
-    Returns `[ { FileName, FullPath, Content } ]`.
+   Update connection string in `CRM/appsettings.json`
 
-* **Security & validation**:
+3. **Run the application**
+   ```bash
+   dotnet run --project CRM
+   ```
 
-  * Rebuild absolute paths from the content root and ensure `StartsWith(contentRoot)`.
-  * Only allow files that match `*.app.*` (case-insensitive).
-  * Ignore requests to non-existent or excluded locations.
-  * No writes in this phase.
+4. **Access the application**
 
-## Implementation Notes
+   Navigate to `https://localhost:5001` in your browser.
 
-* **No framework edits**: New functionality is delivered via `.app.` partials/pages only.
-* **Performance**: Enumeration is lightweight; we can add caching if needed later.
-* **Consistency**: Uses `Helpers.GetOrPost<T>` and existing Monaco integration, mirroring patterns from other `.app.` pages.
-* **Accessibility**: The list groups improve scanability; Monaco’s built-in features aid readability.
+## Customization Tools
 
-## Setup / Usage
+### Rename Project
 
-1. Build and run FreeManager as usual.
-2. Navigate to the page hosting `Index.app.razor` (typically the home view when `Model.View == "home"`).
-3. Use the filter to narrow file lists; click a file to preview its contents in Monaco.
+Use the rename utility to customize the project name, namespaces, and GUIDs:
 
-> If namespaces or paths differ in your environment, adjust the partial controller’s namespace to match the project’s `DataController` home.
+```bash
+"Rename FreeCRM.exe" MyProjectName
+```
 
-## Future Work
+This will:
+- Rename all project files and folders
+- Generate new GUIDs for each project
+- Update namespaces throughout the codebase
+- Update solution file references
 
-* **Write path**: Add `/api/AppFiles/Save` with ETag/hash for optimistic concurrency, plus Monaco write mode and diff preview.
-* **Search**: Server-side regex with match previews; jump between occurrences.
-* **Git integration**: Show changed `.app.` files first; one-click commit with message; optional branch/PR creation.
-* **Live updates**: File watcher + SignalR to refresh list/preview on disk changes.
+### Remove Optional Modules
 
-## FAQ
+Remove modules you don't need using the removal utility:
 
-**Q: Why not just let folks use their IDE?**
-A: They still can. This viewer is about **discoverability** and shared context, especially for reviewers and non-IDE stakeholders.
+```bash
+# Remove specific modules
+"Remove Modules from FreeCRM.exe" remove:Invoices,Payments
 
-**Q: Can we view non-`.app.` files?**
-A: Intentionally no. This tool is for app-layer customization only, which keeps scope focused and risk low.
+# Keep only specific modules
+"Remove Modules from FreeCRM.exe" keep:Tags,Appointments
 
-**Q: How hard is it to enable editing later?**
-A: Straightforward—add a `Save` endpoint and flip Monaco to writeable. We’ll include concurrency checks and optional git hooks to keep it safe.
+# Remove all optional modules
+"Remove Modules from FreeCRM.exe" remove:all
+```
 
-**Q: Is this safe to expose anonymously?**
-A: You can gate the endpoints with the same auth policy as other app pages. By default we recommend allowing **authenticated** access only.
+**Available optional modules:**
+- Appointments
+- EmailTemplates
+- Invoices
+- Locations
+- Payments
+- Services
+- Tags
 
----
+> **Note:** The removal tool may leave some remnants. If you find any, please open an issue on GitHub with the file name and line number.
 
-If you want these wrapped into actual files (README.md snippets or an ADR), I can spit out ready-to-commit markdown next.
+> **Note:** These utilities are Windows-only (.exe). Cross-platform alternatives are planned.
+
+## Development
+
+### Running Tests
+
+```bash
+dotnet test
+```
+
+### Building for Production
+
+```bash
+dotnet publish -c Release
+```
+
+### Database Migrations
+
+```bash
+# Add migration
+dotnet ef migrations add MigrationName --project CRM.EFModels --startup-project CRM
+
+# Apply migrations
+dotnet ef database update --project CRM.EFModels --startup-project CRM
+```
+
+## CI/CD Pipeline
+
+GitHub Actions workflow runs on push to `main`, `master`, and `claude/**` branches:
+
+| Job | Purpose |
+|-----|---------|
+| **build** | Restore, build, and run tests |
+| **publish** | Create deployment artifacts |
+
+Both jobs run in parallel on `ubuntu-latest`.
+
+## Plugin System
+
+FreeCRM includes a plugin system for extending functionality. See `CRM/Plugins/Plugins.md` for documentation.
+
+Example plugins included:
+- `HelloWorld` - Basic plugin example
+- `Example1`, `Example2`, `Example3` - Feature examples
+- `LoginWithPrompts` - Custom login flow
+- `UserUpdate` - User lifecycle hooks
+
+## Configuration
+
+Key settings in `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=FreeCRM;..."
+  },
+  "Authentication": {
+    "Google": { "ClientId": "", "ClientSecret": "" },
+    "Facebook": { "AppId": "", "AppSecret": "" },
+    "Microsoft": { "ClientId": "", "ClientSecret": "" }
+  }
+}
+```
+
+App-specific settings in `GlobalSettings.App.cs`:
+
+```csharp
+public static class App
+{
+    public static string Name { get; set; } = "FreeManager";
+    public static string Version { get; set; } = "1.0.0";
+    public static string CompanyName { get; set; } = "Your Company";
+    // Add your app-specific settings here
+}
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Add code to `.App.` files (never modify core files)
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+## Documentation
+
+Additional documentation is available in the `docs/` folder:
+
+- [Meeting Notes](docs/meeting-notes/) - Team discussion records
+- [Architecture Decisions](docs/architecture/) - ADRs
+
+## License
+
+See [LICENSE](LICENSE) file for details.
+
+## Resources
+
+- [FreeCRM (Original)](https://github.com/WSU-EIT/FreeCRM)
+- [FreeCICD (Example Derivative)](https://github.com/WSU-EIT/FreeCICD)
+- [Blazor Documentation](https://learn.microsoft.com/en-us/aspnet/core/blazor/)
+- [Entity Framework Core](https://learn.microsoft.com/en-us/ef/core/)
+- [MudBlazor](https://mudblazor.com/)
+- [Radzen Blazor](https://blazor.radzen.com/)
