@@ -17,8 +17,11 @@ public partial class DataAccess
         get {
             return new Dictionary<string, string>
             {
-                //{ "AppTitle", "My Custom App Title" },
-                //{ "YourLanguageItem", "Your Language Item" },
+                { "AppBuilder", "App Builder" },
+                { "Dashboard", "Dashboard" },
+                { "EntityWizard", "Entity Wizard" },
+                { "SetupWizardBuilder", "Setup Wizard" },
+                { "TemplateGallery", "Templates" },
             };
         }
     }

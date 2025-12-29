@@ -7,7 +7,11 @@ public static partial class Helpers
     public static Dictionary<string, List<string>> AppIcons {
         get {
             Dictionary<string, List<string>> icons = new Dictionary<string, List<string>> {
-                { "fa:fa-solid fa-home", new List<string> { "IconName1", "IconName2" }},
+                { "fa:fa-solid fa-cubes", new List<string> { "Builder", "AppBuilder" }},
+                { "fa:fa-solid fa-gauge-high", new List<string> { "Dashboard" }},
+                { "fa:fa-solid fa-wand-magic-sparkles", new List<string> { "Wizard", "EntityWizard" }},
+                { "fa:fa-solid fa-layer-group", new List<string> { "Templates", "TemplateGallery" }},
+                { "fa:fa-solid fa-hat-wizard", new List<string> { "SetupWizard", "SetupWizardBuilder" }},
             };
 
             return icons;
@@ -95,20 +99,27 @@ public static partial class Helpers
 
     public static List<DataObjects.MenuItem> MenuItemsApp {
         get {
-            // Add any app-specific top-level menu items here.
             var output = new List<DataObjects.MenuItem>();
 
-            // Sample
-            //if (Model.User.Admin) {
-            //    output.Add(new DataObjects.MenuItem {
-            //        Title = "My Custom Menu Item",
-            //        Icon = "Home",
-            //        PageNames = new List<string> { "myitems", "editmyitem" },
-            //        SortOrder = 1000,
-            //        url = Helpers.BuildUrl("MyItems"),
-            //        AppAdminOnly = false,
-            //    });
-            //}
+            // New Template Selection - main entry point
+            output.Add(new DataObjects.MenuItem {
+                Title = "New Project",
+                Icon = "Templates",
+                PageNames = new List<string> { "templates", "templates/setup" },
+                SortOrder = 100,
+                url = BuildUrl("Templates"),
+                AppAdminOnly = false,
+            });
+
+            // My Projects - view saved projects
+            output.Add(new DataObjects.MenuItem {
+                Title = "My Projects",
+                Icon = "Builder",
+                PageNames = new List<string> { "appbuilder", "appbuilder/new", "appbuilder/edit" },
+                SortOrder = 200,
+                url = BuildUrl("AppBuilder"),
+                AppAdminOnly = false,
+            });
 
             return output;
         }
@@ -116,8 +127,50 @@ public static partial class Helpers
 
     public static List<DataObjects.MenuItem> MenuItemsAdminApp {
         get {
-            // Add any app-specific admin menu items here.
             var output = new List<DataObjects.MenuItem>();
+
+            // Archive section - old pages moved here
+            if (Model.User.Admin) {
+                // Entity Wizard (legacy - for custom entity building)
+                output.Add(new DataObjects.MenuItem {
+                    Title = "Entity Wizard (Archive)",
+                    Icon = "Wizard",
+                    PageNames = new List<string> { "appbuilder/entitywizard" },
+                    SortOrder = 800,
+                    url = BuildUrl("AppBuilder/EntityWizard"),
+                    AppAdminOnly = false,
+                });
+
+                // Template Gallery (legacy - view all template types)
+                output.Add(new DataObjects.MenuItem {
+                    Title = "Template Gallery (Archive)",
+                    Icon = "Templates",
+                    PageNames = new List<string> { "fm/templates" },
+                    SortOrder = 810,
+                    url = BuildUrl("fm/templates"),
+                    AppAdminOnly = false,
+                });
+
+                // Dashboard (legacy)
+                output.Add(new DataObjects.MenuItem {
+                    Title = "Dashboard (Archive)",
+                    Icon = "Dashboard",
+                    PageNames = new List<string> { "appbuilder/dashboard" },
+                    SortOrder = 820,
+                    url = BuildUrl("AppBuilder/Dashboard"),
+                    AppAdminOnly = false,
+                });
+
+                // Setup Wizard Builder (legacy)
+                output.Add(new DataObjects.MenuItem {
+                    Title = "Setup Wizard (Archive)",
+                    Icon = "SetupWizard",
+                    PageNames = new List<string> { "appbuilder/setupwizardbuilder" },
+                    SortOrder = 830,
+                    url = BuildUrl("AppBuilder/SetupWizardBuilder"),
+                    AppAdminOnly = false,
+                });
+            }
 
             return output;
         }
