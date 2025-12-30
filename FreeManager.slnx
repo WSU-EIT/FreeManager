@@ -8,6 +8,7 @@
     <File Path="Rename FreeFreeManager.exe" />
   </Folder>
   <Project Path="Docs/Docs.csproj" Id="aa702bbf-8dc9-417e-aabe-93113741909f" />
+  <Project Path="FreeManager.Cli/FreeManager.Cli.csproj" Id="6d8849c6-607f-4a0e-bd3a-503d1554d3e7" />
   <Project Path="FreeManager.Client/FreeManager.Client.csproj" />
   <Project Path="FreeManager.DataAccess/FreeManager.DataAccess.csproj" Id="ae76f1ba-0d72-4ebf-b592-51d598904ca6" />
   <Project Path="FreeManager.DataObjects/FreeManager.DataObjects.csproj" Id="aae2ed65-b4da-44b2-88c3-39936f6fa31b" />
